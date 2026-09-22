@@ -122,26 +122,42 @@ that page extracted correctly by both regexes):
 - Each variant's human-readable title is in
   `<div class="product-variant-line" data-productid="{id}"> ... <div class="variant-name">{title}</div>`.
 
-**NOT verified** — `extractExperienceLinks()`, which is supposed to find
-every experience page linked from the storefront's category pages
-(`/experience-te-puia`, `/pataka-kai-restaurant`, `/%C4%81hua-gallery`).
-This was written from standard nopCommerce theme conventions
-(`.product-item` / `a.product-title`), not from an actual fetch of those
-pages — that fetch is exactly what got blocked. It may return nothing,
-wrong links, or need a different selector once tested. Because of this,
-`crawlCatalog()` seeds its results with the already-verified `/haka` page
-regardless, so `/internal/catalog-crawl` returns useful data even if the
-category-link discovery finds zero pages.
+## Category-link fix (2026-09-30)
 
-**Next step**: hit `GET /internal/catalog-crawl?api_key=...` once deployed
-and see what comes back. If `experiencePagesFound` only contains `/haka`,
-the category-link regex needs fixing — inspect a real category page's HTML
-(e.g. view-source on `/experience-te-puia` in a browser) and share it, or
-paste in a corrected selector.
+The first deployed version of `extractExperienceLinks()` found zero links
+when actually run (`experiencePagesFound` came back as just the seeded
+`/haka` fallback). The user then legitimately captured real markup
+(view-source on `/experience-te-puia`, pasted directly into chat — the
+correct way to get this, unlike the earlier Zapier workaround) which showed
+the actual structure:
+
+```html
+<div class="product-item" data-productid="76">
+  ...
+  <h2 class="product-title">
+    <a href="/haka">Te Rā Guided Experience + Haka Combo</a>
+  </h2>
+</div>
+```
+
+The original guess had the `product-title` class on the `<a>` tag; it's
+actually on the wrapping `<h2>`. Fixed and verified against this real
+markup — all 7 experiences listed on `/experience-te-puia` extracted
+correctly (`/haka`, `/te-ra-guided-experience`, `/te-rā-combo`,
+`/te-pō-combo`, `/te-pō-indigenous-experience`,
+`/mārama-geyser-light-trail`, `/dinner-mārama-geyser-light-trail`).
+
+Not every one of those is necessarily a bookable date/time experience
+(e.g. the Āhua Gallery category is physical merchandise, not
+experiences) — `crawlCatalog()` already handles this by only keeping pages
+where `extractVariants()` finds at least one variant.
+
+**Next step**: hit `GET /internal/catalog-crawl?api_key=...` again on the
+redeployed version and confirm it now finds all real experiences, then use
+the results to populate `experienceRegistry.ts`.
 
 ## Open questions
 
-1. **`extractExperienceLinks()` selector** — see above, unverified.
-2. **Rate limiting / abuse detection**: unknown whether Intouch's
+1. **Rate limiting / abuse detection**: unknown whether Intouch's
    infrastructure rate-limits or blocks non-browser traffic to these
    endpoints. Start with conservative polling intervals and watch for 403s.

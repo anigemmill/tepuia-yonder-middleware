@@ -32,16 +32,17 @@ async function fetchText(path: string): Promise<string> {
 }
 
 /**
- * UNVERIFIED: built from standard nopCommerce theme conventions
- * (product boxes as `.product-item` with an `<a class="product-title">`),
- * not confirmed against this storefront's actual category page markup —
- * that fetch was blocked before it could be captured. Needs a live test;
- * if it returns nothing, inspect a category page's HTML directly and fix
- * this regex.
+ * VERIFIED against real category page HTML (view-source of
+ * /experience-te-puia, provided directly by the user on 2026-09-30 — all
+ * 7 listed experiences matched correctly): each product is
+ * `<div class="product-item" data-productid="{id}">` containing
+ * `<h2 class="product-title"><a href="{link}">{title}</a></h2>`. The class
+ * is on the wrapping `<h2>`, not the `<a>` itself — the original guess had
+ * this backwards.
  */
-function extractExperienceLinks(categoryHtml: string): string[] {
+export function extractExperienceLinks(categoryHtml: string): string[] {
   const links = new Set<string>();
-  const re = /<a[^>]+href="(\/[^"?]+)"[^>]*class="[^"]*product-title[^"]*"/g;
+  const re = /<h2 class="product-title">\s*<a href="([^"]+)"/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(categoryHtml))) {
     links.add(match[1]);
@@ -73,7 +74,7 @@ function extractProductAttributePairs(html: string): Map<number, number> {
  * (the window has to be wide enough to skip past a picture's alt/title
  * attributes, which repeat the full title text and can be long).
  */
-function extractVariants(html: string): DiscoveredVariant[] {
+export function extractVariants(html: string): DiscoveredVariant[] {
   const attributeIdByProductId = extractProductAttributePairs(html);
   const variants: DiscoveredVariant[] = [];
 
