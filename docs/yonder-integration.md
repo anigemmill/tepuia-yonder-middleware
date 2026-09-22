@@ -8,6 +8,22 @@ which only exposes lead/review triggers and a one-way booking-sync write —
 see `docs/investigation.md`'s earlier notes on this). This doc tracks
 whether/how we can bridge that gap.
 
+## Registry completed (2026-10-01)
+
+The registry gap noted in Phase 1 is closed: `experienceRegistry.ts` now
+has all 38 ticket-type variants across all 11 bookable experiences found
+by `GET /internal/catalog-crawl` (Adult/Child/Infant/Family splits of Te
+Rā, Te Rā + Haka, Te Rā Combo, Te Pō, Te Pō Combo, Mārama, Dinner +
+Mārama, Sunday Brunch, Hāngī Buffet Lunch/Dinner, Christmas Lunch).
+Generated programmatically from the crawl's raw JSON output (not
+hand-typed) to avoid transcription errors in the IDs; verified for
+duplicate slugs/productIds and that `/api/experiences` returns all 38
+locally. Only `te-ra-haka-combo-adult` has been checked against a *live*
+availability response so far — the other 37 use the same code path
+(`fetchEventSeries`/`fetchProductDetails`) and same request shape already
+verified live, so they're expected to work, but haven't each been
+individually spot-checked against the real site yet.
+
 ## Phase 1 — Existing system (2026-10-01)
 
 Confirmed by reading the actual repository, not from memory.
