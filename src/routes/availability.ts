@@ -17,8 +17,37 @@ function parseDateParam(date: unknown): string | null {
   return typeof date === "string" && ISO_DATE_RE.test(date) ? date : null;
 }
 
+/**
+ * Both fetchEventSeries and fetchProductDetails build their request around
+ * the event-series date-proxy field (product_attribute_{id}_proxy=DATE).
+ * "event-list" products use a dropdown of specific event IDs instead — a
+ * different field entirely — so this minimal-form approach doesn't apply
+ * to them yet. Rather than send a request we know is shaped wrong (which
+ * silently returns empty instead of erroring — see
+ * docs/yonder-integration.md), refuse up front for anything that isn't a
+ * confirmed "event-series" product.
+ */
+function checkBookingTypeSupported(
+  experience: { bookingType: string },
+  res: import("express").Response,
+): boolean {
+  if (experience.bookingType === "event-series") return true;
+  if (experience.bookingType === "event-list") {
+    res.status(501).json({
+      error:
+        "This experience uses Te Puia's older 'event-list' booking mechanism, which this middleware doesn't support yet (see docs/yonder-integration.md).",
+    });
+    return false;
+  }
+  res.status(501).json({
+    error:
+      "This experience's booking mechanism hasn't been verified yet (bookingType: unknown). Re-run GET /internal/catalog-crawl and update experienceRegistry.ts before relying on this slug.",
+  });
+  return false;
+}
+
 availabilityRouter.get("/experiences", (_req, res) => {
-  res.json(EXPERIENCE_REGISTRY.map(({ slug, label }) => ({ slug, label })));
+  res.json(EXPERIENCE_REGISTRY.map(({ slug, label, bookingType }) => ({ slug, label, bookingType })));
 });
 
 availabilityRouter.get("/experiences/:slug/availability", async (req, res) => {
@@ -27,6 +56,8 @@ availabilityRouter.get("/experiences/:slug/availability", async (req, res) => {
     res.status(404).json({ error: `Unknown experience slug: ${req.params.slug}` });
     return;
   }
+
+  if (!checkBookingTypeSupported(experience, res)) return;
 
   const date = parseDateParam(req.query.date);
   if (!date) {
@@ -64,6 +95,8 @@ availabilityRouter.get("/experiences/:slug/price", async (req, res) => {
     res.status(404).json({ error: `Unknown experience slug: ${req.params.slug}` });
     return;
   }
+
+  if (!checkBookingTypeSupported(experience, res)) return;
 
   const date = parseDateParam(req.query.date);
   if (!date) {

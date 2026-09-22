@@ -156,8 +156,55 @@ where `extractVariants()` finds at least one variant.
 redeployed version and confirm it now finds all real experiences, then use
 the results to populate `experienceRegistry.ts`.
 
+## Two different booking mechanisms discovered (2026-10-02)
+
+The registry was populated with all 38 discovered ticket-type variants, then
+spot-checked live. `te-ra-haka-combo-adult` (the originally verified one)
+worked correctly on a new date. But `te-ra-guided-experience-adult`
+(productId 17) returned `slots: []` on every date tried — near-term and
+far-out, weekday and not — despite the identical underlying activity
+clearly running (visible as a session inside the Haka combo's own response
+on the same date).
+
+The user grabbed real view-source of `/te-ra-guided-experience` (legitimate
+capture, same as the category page fix) and it revealed why: this product
+uses a **completely different attribute type** than Haka:
+
+| | Haka combo (`te-ra-haka-combo-*`) | Te Rā Guided Experience (`te-ra-guided-experience-*`) |
+|---|---|---|
+| Attribute control | date-picker (`input.eventSeriesDate`) | dropdown of specific events (`select.eventDropdown`) |
+| AJAX endpoint | `POST /intouchProductEventSeries/list` | `POST /intouchProductEvents/list` (no "Series") |
+| Key param | `startDateString` (a date) | no date param — dropdown is pre-populated server-side with upcoming events; a calendar popup fetches further-out ones through FullCalendar's own date-range mechanism (not yet captured) |
+
+Calling the event-series endpoint for an event-list product doesn't error —
+it just silently returns an empty array, which is indistinguishable from
+"legitimately no availability" unless you already know to be suspicious.
+That's a real correctness risk for a system meant to tell guests accurate
+availability.
+
+**Fix applied**: `catalogCrawler.ts` now detects which of the two AJAX URLs
+appears near each variant's `productId`/`attributeId` pair and records it
+as `bookingType: "event-series" | "event-list"`. `experienceRegistry.ts`
+carries this per entry (`"unknown"` for the 28 not yet re-crawled since this
+fix), and `availability.ts`/`price` refuse up front with a `501` for
+anything that isn't a confirmed `"event-series"` — better an honest "not
+supported yet" than a silently wrong empty result.
+
+**Still needed to fully support `event-list` products**: a real capture of
+the FullCalendar widget's actual request when a user picks a future date in
+its popup (open `/te-ra-guided-experience`, click the calendar icon next to
+the Event dropdown, navigate to a future date, capture the resulting
+`/intouchProductEvents/list` request in DevTools). FullCalendar appends its
+own `start`/`end`-style params to the event source's static data, and the
+exact param names/format aren't visible from page source alone.
+
 ## Open questions
 
 1. **Rate limiting / abuse detection**: unknown whether Intouch's
    infrastructure rate-limits or blocks non-browser traffic to these
    endpoints. Start with conservative polling intervals and watch for 403s.
+2. **28 registry entries have `bookingType: "unknown"`** — re-run the
+   catalog crawl (now booking-type-aware) and update the registry from its
+   output before trusting any of them.
+3. **`event-list` support not implemented** — see above; needs one more
+   live capture before it can be built.

@@ -12,10 +12,32 @@ const KNOWN_CATEGORY_PATHS = [
   "/%C4%81hua-gallery",
 ];
 
+/**
+ * Te Puia/Intouch products use two different booking mechanisms depending
+ * on how the product's date/event attribute is configured:
+ * - "event-series": a date-picker attribute (input.eventSeriesDate),
+ *   calling POST /intouchProductEventSeries/list with a startDateString —
+ *   this is what tepuiaClient.ts implements today. VERIFIED working
+ *   end to end (Te Rā + Haka Combo).
+ * - "event-list": a dropdown attribute (select.eventDropdown) listing
+ *   specific upcoming events, calling POST /intouchProductEvents/list
+ *   (no "Series") — a fundamentally different request shape with no
+ *   direct date parameter. NOT YET IMPLEMENTED — discovered 2026-10-02
+ *   when Te Rā Guided Experience returned empty availability using the
+ *   event-series client despite the underlying activity clearly running
+ *   (visible as a session inside the Haka combo's response). Calling the
+ *   wrong endpoint for this type doesn't error, it just silently returns
+ *   nothing, which is why this needs to be flagged rather than guessed at.
+ * - "unknown": couldn't find either marker near this variant's attribute
+ *   block — needs investigation before relying on it.
+ */
+export type BookingType = "event-series" | "event-list" | "unknown";
+
 export interface DiscoveredVariant {
   productId: number;
   attributeId: number;
   title: string;
+  bookingType: BookingType;
 }
 
 export interface DiscoveredExperiencePage {
@@ -51,19 +73,30 @@ export function extractExperienceLinks(categoryHtml: string): string[] {
 }
 
 /**
- * VERIFIED against a real fetch of /haka on 2026-09-27: the page's own
- * inline JS literally contains `productId: N, attributeId: M` pairs for
- * every ticket-type variant on the page (each pair appears twice — once
- * per event-list handler — hence the Map dedup).
+ * VERIFIED against real fetches of both /haka (event-series) and
+ * /te-ra-guided-experience (event-list) on 2026-10-02: every AJAX call
+ * block in both product types follows the same literal pattern —
+ * `url: "/intouchProductEvent[Series]/list", ... productId: N, attributeId: M`
+ * — with the URL always appearing before the productId/attributeId pair
+ * in source order. Which of the two URLs appears tells us the booking
+ * type directly, so this single regex replaces the old
+ * productId/attributeId-only extraction and adds type detection for free.
  */
-function extractProductAttributePairs(html: string): Map<number, number> {
-  const pairs = new Map<number, number>();
-  const re = /productId:\s*(\d+),\s*attributeId:\s*(\d+)/g;
+function extractProductAttributeInfo(
+  html: string,
+): Map<number, { attributeId: number; bookingType: BookingType }> {
+  const info = new Map<number, { attributeId: number; bookingType: BookingType }>();
+  const re =
+    /url:\s*["'](\/intouchProductEvent(?:s|Series)?\/list)["'][\s\S]{0,400}?productId:\s*(\d+),\s*attributeId:\s*(\d+)/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(html))) {
-    pairs.set(Number(match[1]), Number(match[2]));
+    const productId = Number(match[2]);
+    if (info.has(productId)) continue;
+    const bookingType: BookingType =
+      match[1] === "/intouchProductEventSeries/list" ? "event-series" : "event-list";
+    info.set(productId, { attributeId: Number(match[3]), bookingType });
   }
-  return pairs;
+  return info;
 }
 
 /**
@@ -75,20 +108,21 @@ function extractProductAttributePairs(html: string): Map<number, number> {
  * attributes, which repeat the full title text and can be long).
  */
 export function extractVariants(html: string): DiscoveredVariant[] {
-  const attributeIdByProductId = extractProductAttributePairs(html);
+  const infoByProductId = extractProductAttributeInfo(html);
   const variants: DiscoveredVariant[] = [];
 
   const blockRe = /data-productid="(\d+)">[\s\S]{0,900}?class="variant-name">\s*([^<]+?)\s*<\/div>/g;
   let match: RegExpExecArray | null;
   while ((match = blockRe.exec(html))) {
     const productId = Number(match[1]);
-    const attributeId = attributeIdByProductId.get(productId);
-    if (attributeId === undefined) continue;
+    const info = infoByProductId.get(productId);
+    if (info === undefined) continue;
 
     variants.push({
       productId,
-      attributeId,
+      attributeId: info.attributeId,
       title: match[2].trim().replace(/\s+/g, " "),
+      bookingType: info.bookingType,
     });
   }
 
