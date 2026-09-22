@@ -14,9 +14,11 @@ export function apiKeyAuth(req: Request, res: Response, next: NextFunction): voi
     return;
   }
 
-  const provided = req.header("x-api-key");
+  // Accept the key via header (proper API usage) or query param (so it's
+  // testable by just pasting a URL in a browser).
+  const provided = req.header("x-api-key") ?? req.query.api_key;
   if (provided !== API_KEY) {
-    res.status(401).json({ error: "Missing or invalid x-api-key header" });
+    res.status(401).json({ error: "Missing or invalid API key (x-api-key header or ?api_key=)" });
     return;
   }
 
