@@ -73,21 +73,38 @@ This is effectively using Te Puia's own internal API, so it should be
 called politely (caching, reasonable poll intervals) since it isn't a
 contracted integration.
 
-## Open questions / not yet verified live
+## Live verification (2026-09-26)
 
-1. **Minimal `productForm`**: the captured request's `productForm` was a
-   snapshot of *every* product on the page, not just the one being queried.
-   `tepuiaClient.ts` currently builds a minimal single-product form as a
-   best guess — **this needs to be tested against the live endpoint**
-   before relying on it in production. If it's rejected, fall back to
-   passing a full captured `productForm` via the `rawProductForm` override.
-2. **Per-experience `productId`/`attributeId` mapping**: only one experience
+Deployed to Render and hit `GET /api/experiences/te-ra-haka-combo-adult/availability?date=2026-09-26`
+directly against the live storefront. Confirmed working end to end:
+
+```json
+{
+  "slug": "te-ra-haka-combo-adult",
+  "label": "Te Rā + Haka Combo (Adult)",
+  "date": "2026-09-26",
+  "slots": [
+    { "seriesId": 13938, "title": "Te Ra + Haka Combo 10am - 12pm", "status": "available", "remaining": 70, "sessions": [...] },
+    { "seriesId": 14085, "title": "Te Ra + Haka Combo 11am - 1pm", "status": "available", "remaining": 45, "sessions": [...] },
+    { "seriesId": 14232, "title": "Te Ra + Haka Combo 12pm - 2pm", "status": "fully_booked", "remaining": 0, "sessions": [...] }
+  ]
+}
+```
+
+This confirms the **minimal `productForm`** guess in `tepuiaClient.ts` (built
+from just the queried product's own fields, not the full page snapshot the
+browser sends) is accepted by the live endpoint. No `rawProductForm`
+override is needed.
+
+## Open questions
+
+1. **Per-experience `productId`/`attributeId` mapping**: only one experience
    (`te-ra-haka-combo-adult`, productId 90, attributeId 229) is confirmed.
    Additional experiences need their IDs added to
    `src/lib/experienceRegistry.ts`. These can be found either via another
    traffic capture, or via the nopCommerce admin (Catalog > Products > edit
    product > Product attributes tab > edit the date attribute mapping — the
    attributeId is in that page's URL).
-3. **Rate limiting / abuse detection**: unknown whether Intouch's
+2. **Rate limiting / abuse detection**: unknown whether Intouch's
    infrastructure rate-limits or blocks non-browser traffic to these
    endpoints. Start with conservative polling intervals and watch for 403s.
