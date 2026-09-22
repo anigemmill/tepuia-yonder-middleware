@@ -1,5 +1,6 @@
 import express from "express";
 import { availabilityRouter } from "./routes/availability.js";
+import { internalRouter } from "./routes/internal.js";
 import { apiKeyAuth } from "./middleware/apiKeyAuth.js";
 
 const PORT = process.env.PORT ?? 3000;
@@ -11,6 +12,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api", apiKeyAuth, availabilityRouter);
+app.use("/internal", apiKeyAuth, internalRouter);
 
 app.listen(PORT, () => {
   console.log(`tepuia-yonder-middleware listening on port ${PORT}`);
