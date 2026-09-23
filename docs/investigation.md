@@ -198,13 +198,28 @@ the Event dropdown, navigate to a future date, capture the resulting
 own `start`/`end`-style params to the event source's static data, and the
 exact param names/format aren't visible from page source alone.
 
+## Registry fully classified (2026-10-03)
+
+Re-ran the booking-type-aware crawl and updated all 38 registry entries
+from its real output (no more `"unknown"` entries). Result, by product
+family:
+
+| bookingType | Count | Experiences |
+|---|---|---|
+| `event-series` (working) | 17 | Te Rā + Haka Combo, Te Rā Combo, Te Pō, Te Pō Combo, Dinner + Mārama |
+| `event-list` (not yet supported) | 21 | Te Rā Guided Experience, Mārama, Sunday Brunch, Hāngī Buffet Lunch, Hāngī Buffet Dinner, Christmas Lunch |
+
+**More than half the catalog (21/38) currently returns a `501`** via the
+gating added above, rather than working live. Implementing `event-list`
+support (see "Still needed" above — one more capture of the FullCalendar
+date-range request) would roughly double real coverage and is the single
+highest-value next step for the middleware itself.
+
 ## Open questions
 
 1. **Rate limiting / abuse detection**: unknown whether Intouch's
    infrastructure rate-limits or blocks non-browser traffic to these
    endpoints. Start with conservative polling intervals and watch for 403s.
-2. **28 registry entries have `bookingType: "unknown"`** — re-run the
-   catalog crawl (now booking-type-aware) and update the registry from its
-   output before trusting any of them.
-3. **`event-list` support not implemented** — see above; needs one more
-   live capture before it can be built.
+2. **`event-list` support not implemented** — 21 of 38 registry entries are
+   blocked on this. Needs one more live capture (FullCalendar's date-range
+   request) before it can be built — see above.
